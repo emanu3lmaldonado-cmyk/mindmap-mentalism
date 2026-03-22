@@ -24,8 +24,8 @@ html,body{width:100%;height:100%;overflow:hidden;background:#000;font-family:-ap
 .dib img{width:62px;height:62px;display:block;object-fit:cover}
 #cr{position:fixed;inset:0;z-index:400;background:rgba(0,0,0,.93);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;opacity:0;pointer-events:none;transition:opacity .4s ease}
 #cr.on{opacity:1;pointer-events:all}
-.card{width:min(70vw,252px);aspect-ratio:2.5/3.5;background:#fff;border-radius:14px;box-shadow:0 40px 100px rgba(0,0,0,.95);display:flex;flex-direction:column;align-items:center;justify-content:space-between;padding:12px;transform:scale(.15) rotateY(90deg);transition:transform .65s cubic-bezier(.34,1.5,.64,1)}
-.card.show{transform:scale(1) rotateY(0)}
+.card{width:min(70vw,252px);aspect-ratio:2.5/3.5;background:#fff;border-radius:14px;box-shadow:0 40px 100px rgba(0,0,0,.95);display:flex;flex-direction:column;align-items:center;justify-content:space-between;padding:12px;transform:translateY(110vh) rotate(8deg);opacity:0;transition:transform .7s cubic-bezier(.22,1,.36,1), opacity .4s ease}
+.card.show{transform:translateY(0) rotate(0deg);opacity:1}
 .cc{width:100%;display:flex;flex-direction:column;align-items:flex-start;line-height:1.05}
 .cc.bot{align-items:flex-end;transform:rotate(180deg)}
 .cv{font-size:clamp(1.7rem,7vw,2.4rem);font-weight:800;font-family:Georgia,serif;line-height:1}
@@ -160,22 +160,52 @@ function spConfirm(){if(!picked)return;spClose();ready=true;}
 function doFall(){
   if(!ready||revealed||!picked)return;revealed=true;
   const wraps=document.querySelectorAll('#grid .iw'),bodies=[];
+  const CX=window.innerWidth/2, CY=window.innerHeight/3;
   wraps.forEach(w=>{
     const r=w.getBoundingClientRect(),cl=w.cloneNode(true);
     Object.assign(cl.style,{position:'fixed',left:r.left+'px',top:r.top+'px',width:r.width+'px',margin:'0',padding:'0',zIndex:'30',pointerEvents:'none',transition:'none'});
     document.body.appendChild(cl);w.style.opacity='0';
-    bodies.push({el:cl,x:0,y:0,vx:(Math.random()-.5)*8,vy:-(4+Math.random()*9),g:.5+Math.random()*.4,rot:0,rv:(Math.random()-.5)*15,o:1,alive:true});
+    // Direction away from center of screen = explosion effect
+    const ix=r.left+r.width/2, iy=r.top+r.height/2;
+    const dx=ix-CX, dy=iy-CY;
+    const dist=Math.sqrt(dx*dx+dy*dy)||1;
+    const speed=18+Math.random()*14;
+    bodies.push({
+      el:cl, x:0, y:0,
+      vx:(dx/dist)*speed + (Math.random()-.5)*6,
+      vy:(dy/dist)*speed + (Math.random()-.5)*6,
+      g:.35, rot:0,
+      rv:(Math.random()-.5)*20,
+      o:1, alive:true,
+      // bounce state
+      bounced:false, bounceY:r.top
+    });
   });
-  let frame=0;const H=window.innerHeight;
+  let frame=0;const W=window.innerWidth,H=window.innerHeight;
   function tick(){
     frame++;let any=false;
     bodies.forEach(p=>{
-      if(!p.alive)return;p.vy+=p.g;p.x+=p.vx;p.y+=p.vy;p.rot+=p.rv;
-      if(p.y>H*.5)p.o=Math.max(0,p.o-.05);
-      if(p.o<=0||p.y>H+60){p.el.remove();p.alive=false;return;}
-      any=true;p.el.style.transform=`translate(${p.x}px,${p.y}px) rotate(${p.rot}deg)`;p.el.style.opacity=p.o;
+      if(!p.alive)return;
+      p.vy+=p.g; p.x+=p.vx; p.y+=p.vy; p.rot+=p.rv;
+      // Bounce off walls
+      const el=p.el;
+      const cx=parseFloat(el.style.left)+p.x+32;
+      if(cx<0||cx>W){ p.vx*=-.7; p.rv*=-.8; }
+      // Bounce off floor
+      const cy=parseFloat(el.style.top)+p.y+32;
+      if(cy>H-80&&!p.bounced){
+        p.vy*=-.55; p.vx*=.8; p.rv*=.7;
+        p.bounced=true;
+      }
+      // Fade after bounce or if going off screen
+      if(p.bounced) p.o=Math.max(0,p.o-.025);
+      if(cy>H+100) p.o=0;
+      if(p.o<=0){p.el.remove();p.alive=false;return;}
+      any=true;
+      p.el.style.transform=`translate(${p.x}px,${p.y}px) rotate(${p.rot}deg)`;
+      p.el.style.opacity=p.o;
     });
-    if(any||frame<25)requestAnimationFrame(tick);else showCard();
+    if(any||frame<30)requestAnimationFrame(tick);else showCard();
   }
   spawnP();requestAnimationFrame(tick);
 }
