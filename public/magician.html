@@ -1,0 +1,521 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Panel de Control</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Syne:wght@400;600;700&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0a0a0f;
+      --surface: #12121a;
+      --border: #1e1e2e;
+      --text: #e8e6f0;
+      --muted: #5a5870;
+      --accent: #7c6df0;
+      --green: #4ade80;
+      --amber: #fbbf24;
+      --red: #f87171;
+      --mono: 'JetBrains Mono', monospace;
+    }
+
+    html, body {
+      height: 100%; background: var(--bg);
+      font-family: 'Syne', sans-serif;
+      color: var(--text); overflow-x: hidden;
+    }
+
+    /* ── LOCK SCREEN ── */
+    #lock-screen {
+      position: fixed; inset: 0; z-index: 999;
+      background: var(--bg);
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      gap: 1.2rem;
+    }
+    .lock-logo {
+      font-size: 2.5rem; margin-bottom: 0.5rem;
+    }
+    .lock-title {
+      font-size: 1.1rem; font-weight: 600;
+      letter-spacing: 0.15em; text-transform: uppercase;
+      color: var(--muted);
+    }
+    .lock-input {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 8px; padding: 0.8rem 1.2rem;
+      color: var(--text); font-family: var(--mono);
+      font-size: 1.1rem; letter-spacing: 0.3em;
+      text-align: center; outline: none; width: 220px;
+    }
+    .lock-input:focus { border-color: var(--accent); }
+    .lock-btn {
+      padding: 0.7rem 2rem;
+      background: var(--accent); border: none; border-radius: 8px;
+      color: white; font-family: 'Syne', sans-serif;
+      font-size: 0.95rem; font-weight: 600;
+      cursor: pointer; transition: opacity 0.2s;
+    }
+    .lock-btn:hover { opacity: 0.85; }
+    .lock-error { color: var(--red); font-size: 0.85rem; }
+
+    /* ── MAIN APP ── */
+    #app { display: none; min-height: 100vh; }
+    #app.visible { display: flex; flex-direction: column; }
+
+    /* Header */
+    .header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 1rem 1.5rem;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface);
+    }
+    .header-left { display: flex; align-items: center; gap: 0.8rem; }
+    .header-logo { font-size: 1.3rem; }
+    .header-title { font-size: 1rem; font-weight: 700; letter-spacing: 0.05em; }
+    .status-dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: var(--muted);
+      transition: background 0.3s;
+    }
+    .status-dot.connected { background: var(--green); box-shadow: 0 0 8px var(--green); }
+    .status-dot.active { animation: blink 1s infinite; }
+    @keyframes blink {
+      0%, 100% { opacity: 1; } 50% { opacity: 0.3; }
+    }
+    .status-text { font-size: 0.8rem; color: var(--muted); font-family: var(--mono); }
+
+    /* Session bar */
+    .session-bar {
+      padding: 0.7rem 1.5rem;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;
+    }
+    .session-label { font-size: 0.75rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.1em; }
+    .session-input {
+      flex: 1; min-width: 120px;
+      background: var(--bg); border: 1px solid var(--border);
+      border-radius: 6px; padding: 0.4rem 0.8rem;
+      color: var(--text); font-family: var(--mono); font-size: 0.85rem;
+      outline: none;
+    }
+    .session-input:focus { border-color: var(--accent); }
+    .copy-link-btn {
+      padding: 0.4rem 1rem;
+      background: transparent; border: 1px solid var(--accent);
+      border-radius: 6px; color: var(--accent);
+      font-size: 0.8rem; cursor: pointer;
+      transition: background 0.2s;
+      white-space: nowrap;
+    }
+    .copy-link-btn:hover { background: rgba(124,109,240,0.1); }
+
+    /* Main grid */
+    .main-grid {
+      flex: 1;
+      display: grid;
+      grid-template-columns: 1fr 340px;
+      grid-template-rows: auto 1fr;
+      gap: 1px;
+      background: var(--border);
+    }
+
+    /* ── LIVE DATA PANEL ── */
+    .live-panel {
+      background: var(--bg);
+      padding: 1.5rem;
+      grid-row: 1 / 3;
+    }
+    .panel-label {
+      font-size: 0.7rem; text-transform: uppercase;
+      letter-spacing: 0.15em; color: var(--muted);
+      margin-bottom: 1rem;
+    }
+
+    .big-place {
+      font-size: clamp(1.8rem, 4vw, 3rem);
+      font-weight: 700;
+      line-height: 1.1;
+      min-height: 3.5rem;
+      transition: all 0.4s ease;
+    }
+    .big-place.highlight {
+      color: var(--accent);
+    }
+    .big-place-sub {
+      margin-top: 0.5rem;
+      font-size: 0.9rem;
+      color: var(--muted);
+      min-height: 1.2rem;
+    }
+
+    .coords-display {
+      margin-top: 1.5rem;
+      display: flex; gap: 1rem;
+    }
+    .coord-box {
+      flex: 1;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 0.8rem;
+    }
+    .coord-box-label { font-size: 0.65rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.1em; }
+    .coord-box-val {
+      margin-top: 0.3rem;
+      font-family: var(--mono);
+      font-size: 1.1rem;
+      font-weight: 600;
+      color: var(--green);
+    }
+
+    .nearby-section {
+      margin-top: 1.5rem;
+    }
+    .nearby-text {
+      font-size: 0.85rem;
+      color: var(--muted);
+      line-height: 1.7;
+      font-family: var(--mono);
+      background: var(--surface);
+      border-radius: 8px;
+      padding: 0.8rem 1rem;
+      min-height: 3rem;
+      border-left: 3px solid var(--accent);
+    }
+
+    /* Confirmed badge */
+    .confirmed-badge {
+      display: inline-flex; align-items: center; gap: 0.5rem;
+      margin-top: 1.2rem;
+      padding: 0.4rem 1rem;
+      background: rgba(74, 222, 128, 0.1);
+      border: 1px solid var(--green);
+      border-radius: 100px;
+      color: var(--green);
+      font-size: 0.8rem; font-weight: 600;
+      opacity: 0; transition: opacity 0.5s;
+    }
+    .confirmed-badge.visible { opacity: 1; }
+
+    /* ── TIMELINE ── */
+    .timeline-panel {
+      background: var(--surface);
+      padding: 1rem;
+      overflow-y: auto;
+      max-height: 60vh;
+    }
+    .timeline-entry {
+      display: flex; gap: 0.8rem;
+      padding: 0.6rem 0;
+      border-bottom: 1px solid var(--border);
+      animation: slideIn 0.3s ease;
+    }
+    @keyframes slideIn {
+      from { opacity: 0; transform: translateX(10px); }
+      to   { opacity: 1; transform: translateX(0); }
+    }
+    .entry-time { font-family: var(--mono); font-size: 0.7rem; color: var(--muted); white-space: nowrap; padding-top: 0.1rem; }
+    .entry-type {
+      font-size: 0.65rem; font-weight: 600; text-transform: uppercase;
+      letter-spacing: 0.08em; padding: 0.15rem 0.5rem;
+      border-radius: 4px; white-space: nowrap; height: fit-content;
+    }
+    .type-map_view { background: rgba(124,109,240,0.15); color: var(--accent); }
+    .type-place_selected { background: rgba(251,191,36,0.15); color: var(--amber); }
+    .type-search { background: rgba(74,222,128,0.15); color: var(--green); }
+    .type-confirmed { background: rgba(74,222,128,0.25); color: var(--green); }
+    .entry-content { font-size: 0.8rem; color: var(--text); line-height: 1.4; }
+
+    /* ── MAP PREVIEW ── */
+    .map-preview-panel {
+      background: var(--bg);
+      padding: 1rem;
+      display: flex; flex-direction: column;
+    }
+    #mini-map {
+      flex: 1;
+      border-radius: 10px;
+      overflow: hidden;
+      min-height: 200px;
+      border: 1px solid var(--border);
+    }
+    .leaflet-control-attribution { display: none !important; }
+
+    /* ── NOTES ── */
+    .notes-textarea {
+      width: 100%; min-height: 80px;
+      background: var(--bg); border: 1px solid var(--border);
+      border-radius: 8px; padding: 0.8rem;
+      color: var(--text); font-family: var(--mono);
+      font-size: 0.82rem; resize: vertical; outline: none;
+      margin-top: 0.8rem;
+    }
+    .notes-textarea:focus { border-color: var(--accent); }
+
+    /* Alert flash */
+    .alert-flash {
+      position: fixed; top: 1rem; right: 1rem;
+      background: var(--green); color: #000;
+      padding: 0.6rem 1.2rem; border-radius: 8px;
+      font-weight: 600; font-size: 0.85rem;
+      transform: translateY(-80px);
+      transition: transform 0.3s ease;
+      z-index: 9999;
+    }
+    .alert-flash.show { transform: translateY(0); }
+  </style>
+</head>
+<body>
+
+<!-- ── PANTALLA DE ACCESO ── -->
+<div id="lock-screen">
+  <div class="lock-logo">🔮</div>
+  <div class="lock-title">Panel del Mago</div>
+  <input class="lock-input" type="password" id="pin-input"
+    placeholder="PIN" maxlength="6"
+    onkeydown="if(event.key==='Enter') unlockPanel()" />
+  <button class="lock-btn" onclick="unlockPanel()">Acceder</button>
+  <div class="lock-error" id="pin-error"></div>
+</div>
+
+<!-- ── PANEL PRINCIPAL ── -->
+<div id="app">
+
+  <div class="header">
+    <div class="header-left">
+      <span class="header-logo">🔮</span>
+      <span class="header-title">MINDMAP CONTROL</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:0.6rem">
+      <div class="status-dot" id="status-dot"></div>
+      <span class="status-text" id="status-text">Desconectado</span>
+    </div>
+  </div>
+
+  <div class="session-bar">
+    <span class="session-label">Sesión:</span>
+    <input class="session-input" type="text" id="session-id-input"
+      value="show-001" placeholder="ID de sesión" />
+    <button class="copy-link-btn" onclick="copySpectatorLink()">📋 Copiar enlace</button>
+    <button class="copy-link-btn" style="border-color:var(--green);color:var(--green)"
+      onclick="reconnectWS()">⚡ Conectar</button>
+  </div>
+
+  <div class="main-grid">
+
+    <!-- ═══ LIVE DATA ═══ -->
+    <div class="live-panel">
+      <div class="panel-label">📍 Ubicación del Espectador</div>
+
+      <div class="big-place" id="live-place">Esperando…</div>
+      <div class="big-place-sub" id="live-sub">Sin selección aún</div>
+
+      <div class="confirmed-badge" id="confirmed-badge">
+        ✓ LUGAR CONFIRMADO
+      </div>
+
+      <div class="coords-display">
+        <div class="coord-box">
+          <div class="coord-box-label">Latitud</div>
+          <div class="coord-box-val" id="live-lat">—</div>
+        </div>
+        <div class="coord-box">
+          <div class="coord-box-label">Longitud</div>
+          <div class="coord-box-val" id="live-lng">—</div>
+        </div>
+        <div class="coord-box">
+          <div class="coord-box-label">Zoom</div>
+          <div class="coord-box-val" id="live-zoom">—</div>
+        </div>
+      </div>
+
+      <div class="nearby-section">
+        <div class="panel-label" style="margin-bottom:0.5rem">📌 Información completa</div>
+        <div class="nearby-text" id="live-nearby">Los datos aparecerán cuando el espectador interactúe con el mapa.</div>
+      </div>
+
+      <div style="margin-top:1.5rem">
+        <div class="panel-label" style="margin-bottom:0.5rem">📝 Notas del mago</div>
+        <textarea class="notes-textarea" placeholder="Escribe tus notas aquí (patter, revelación, palabras clave…)"></textarea>
+      </div>
+
+      <div id="mini-map" style="margin-top:1.2rem;height:200px;"></div>
+    </div>
+
+    <!-- ═══ TIMELINE ═══ -->
+    <div class="timeline-panel">
+      <div class="panel-label">📡 Actividad en tiempo real</div>
+      <div id="timeline"></div>
+    </div>
+
+  </div>
+
+</div>
+
+<!-- Flash alert -->
+<div class="alert-flash" id="alert-flash"></div>
+
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+// ════════════════════════════════════════════════════════════════
+//  PIN DE ACCESO (cambiar antes de usar)
+// ════════════════════════════════════════════════════════════════
+const ACCESS_PIN = '1234';
+
+function unlockPanel() {
+  const pin = document.getElementById('pin-input').value;
+  if (pin === ACCESS_PIN) {
+    document.getElementById('lock-screen').style.display = 'none';
+    document.getElementById('app').classList.add('visible');
+    initMiniMap();
+    reconnectWS();
+  } else {
+    document.getElementById('pin-error').textContent = 'PIN incorrecto';
+    document.getElementById('pin-input').value = '';
+  }
+}
+
+// ════════════════════════════════════════════════════════════════
+//  WEBSOCKET
+// ════════════════════════════════════════════════════════════════
+let ws;
+
+function reconnectWS() {
+  const sessionId = document.getElementById('session-id-input').value.trim() || 'default';
+  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+  const url = `${proto}://${location.host}?session=${sessionId}&role=magician`;
+
+  if (ws) ws.close();
+  ws = new WebSocket(url);
+
+  ws.onopen = () => {
+    setStatus('connected', '● Conectado');
+  };
+  ws.onmessage = (e) => {
+    try { handleMessage(JSON.parse(e.data)); } catch {}
+  };
+  ws.onclose = () => {
+    setStatus('disconnected', '○ Desconectado');
+  };
+  ws.onerror = () => setStatus('disconnected', '✕ Error');
+}
+
+function setStatus(state, text) {
+  const dot = document.getElementById('status-dot');
+  dot.className = 'status-dot';
+  if (state === 'connected') dot.classList.add('connected', 'active');
+  document.getElementById('status-text').textContent = text;
+}
+
+// ════════════════════════════════════════════════════════════════
+//  MANEJAR MENSAJES ENTRANTES
+// ════════════════════════════════════════════════════════════════
+let miniMap, miniMarker;
+
+function handleMessage(data) {
+  if (data.type !== 'location_update') return;
+
+  const { event, lat, lng, zoom, place_name, place_detail, nearby, query } = data;
+
+  // ── Actualizar panel principal ──
+  if (place_name) {
+    const placeEl = document.getElementById('live-place');
+    placeEl.textContent = place_name;
+    placeEl.className = 'big-place' + (event === 'confirmed' ? ' highlight' : '');
+    document.getElementById('live-sub').textContent = place_detail || '';
+    document.getElementById('live-nearby').textContent = nearby || place_detail || '—';
+  }
+
+  if (lat) document.getElementById('live-lat').textContent = parseFloat(lat).toFixed(4) + '°';
+  if (lng) document.getElementById('live-lng').textContent = parseFloat(lng).toFixed(4) + '°';
+  if (zoom) document.getElementById('live-zoom').textContent = zoom;
+
+  // ── Mapa miniatura ──
+  if (lat && lng && miniMap) {
+    miniMap.setView([parseFloat(lat), parseFloat(lng)], Math.min(zoom || 14, 16));
+    if (event === 'place_selected' || event === 'confirmed') {
+      if (miniMarker) miniMap.removeLayer(miniMarker);
+      miniMarker = L.marker([parseFloat(lat), parseFloat(lng)]).addTo(miniMap);
+    }
+  }
+
+  // ── Badge de confirmación ──
+  if (event === 'confirmed') {
+    document.getElementById('confirmed-badge').classList.add('visible');
+    showFlash('🎯 ¡LUGAR CONFIRMADO!');
+  }
+
+  // ── Timeline ──
+  addTimelineEntry(data);
+}
+
+function addTimelineEntry(data) {
+  const tl = document.getElementById('timeline');
+  const now = new Date().toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+
+  const labels = {
+    map_view: 'Vista mapa',
+    place_selected: 'Lugar tocado',
+    search: 'Búsqueda',
+    confirmed: '✓ Confirmado',
+  };
+
+  const content = data.event === 'search'
+    ? `"${data.query}"`
+    : data.place_name
+      ? `${data.place_name}${data.lat ? ` · ${parseFloat(data.lat).toFixed(3)}, ${parseFloat(data.lng).toFixed(3)}` : ''}`
+      : `Zoom ${data.zoom || '?'} · ${data.lat?.slice(0,7)}, ${data.lng?.slice(0,7)}`;
+
+  const entry = document.createElement('div');
+  entry.className = 'timeline-entry';
+  entry.innerHTML = `
+    <span class="entry-time">${now}</span>
+    <span class="entry-type type-${data.event}">${labels[data.event] || data.event}</span>
+    <span class="entry-content">${content}</span>
+  `;
+  tl.prepend(entry);
+
+  // Limitar a 50 entradas
+  while (tl.children.length > 50) tl.removeChild(tl.lastChild);
+}
+
+// ════════════════════════════════════════════════════════════════
+//  MAPA MINIATURA
+// ════════════════════════════════════════════════════════════════
+function initMiniMap() {
+  miniMap = L.map('mini-map', {
+    center: [20, 0], zoom: 2,
+    zoomControl: false, attributionControl: false,
+  });
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+    subdomains: 'abcd', maxZoom: 19,
+  }).addTo(miniMap);
+}
+
+// ════════════════════════════════════════════════════════════════
+//  HELPERS
+// ════════════════════════════════════════════════════════════════
+function copySpectatorLink() {
+  const sessionId = document.getElementById('session-id-input').value.trim() || 'default';
+  const link = `${location.origin}/?s=${sessionId}`;
+  navigator.clipboard.writeText(link).then(() => showFlash('✓ Enlace copiado'));
+}
+
+function showFlash(msg) {
+  const el = document.getElementById('alert-flash');
+  el.textContent = msg;
+  el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), 2500);
+}
+
+// Atajo de teclado: Enter para desbloquear
+document.getElementById('pin-input')?.focus();
+</script>
+</body>
+</html>
