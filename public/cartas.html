@@ -157,57 +157,85 @@ document.addEventListener('touchstart',e=>{
 },{passive:true});
 function spClose(){document.getElementById('sp').classList.remove('on');}
 function spConfirm(){if(!picked)return;spClose();ready=true;}
+// Floating icons state
+let floatingBodies = [];
+let gyroActive = false;
+let gyroX = 0, gyroY = 0;
+let floatAnimFrame = null;
+
 function doFall(){
-  if(!ready||revealed||!picked)return;revealed=true;
-  const wraps=document.querySelectorAll('#grid .iw'),bodies=[];
-  const CX=window.innerWidth/2, CY=window.innerHeight/3;
+  if(!ready||revealed||!picked)return;
+  revealed=true;
+
+  const wraps=document.querySelectorAll('#grid .iw');
+  const W=window.innerWidth, H=window.innerHeight;
+
+  // Convert each icon to a floating particle
   wraps.forEach(w=>{
-    const r=w.getBoundingClientRect(),cl=w.cloneNode(true);
-    Object.assign(cl.style,{position:'fixed',left:r.left+'px',top:r.top+'px',width:r.width+'px',margin:'0',padding:'0',zIndex:'30',pointerEvents:'none',transition:'none'});
-    document.body.appendChild(cl);w.style.opacity='0';
-    // Direction away from center of screen = explosion effect
-    const ix=r.left+r.width/2, iy=r.top+r.height/2;
-    const dx=ix-CX, dy=iy-CY;
+    const r=w.getBoundingClientRect();
+    const cl=w.cloneNode(true);
+    // Random starting velocity — explode outward
+    const cx=r.left+r.width/2, cy=r.top+r.height/2;
+    const dx=cx-W/2, dy=cy-H/2.5;
     const dist=Math.sqrt(dx*dx+dy*dy)||1;
-    const speed=18+Math.random()*14;
-    bodies.push({
-      el:cl, x:0, y:0,
-      vx:(dx/dist)*speed + (Math.random()-.5)*6,
-      vy:(dy/dist)*speed + (Math.random()-.5)*6,
-      g:.35, rot:0,
-      rv:(Math.random()-.5)*20,
-      o:1, alive:true,
-      // bounce state
-      bounced:false, bounceY:r.top
+    const spd=6+Math.random()*5;
+    Object.assign(cl.style,{
+      position:'fixed',left:r.left+'px',top:r.top+'px',
+      width:r.width+'px',margin:'0',padding:'0',
+      zIndex:'30',pointerEvents:'none',transition:'none',
+      willChange:'transform'
+    });
+    document.body.appendChild(cl);
+    w.style.opacity='0';
+    floatingBodies.push({
+      el:cl,
+      // current position (offset from original)
+      x:0, y:0,
+      // velocity
+      vx:(dx/dist)*spd,
+      vy:(dy/dist)*spd,
+      // rotation
+      rot: Math.random()*30-15,
+      // each icon has slightly different gyro sensitivity
+      gyroFactor: 0.6+Math.random()*0.8,
+      depth: 0.5+Math.random()*1.0,
     });
   });
-  let frame=0;const W=window.innerWidth,H=window.innerHeight;
-  function tick(){
-    frame++;let any=false;
-    bodies.forEach(p=>{
-      if(!p.alive)return;
-      p.vy+=p.g; p.x+=p.vx; p.y+=p.vy; p.rot+=p.rv;
-      // Bounce off walls
-      const el=p.el;
-      const cx=parseFloat(el.style.left)+p.x+32;
-      if(cx<0||cx>W){ p.vx*=-.7; p.rv*=-.8; }
-      // Bounce off floor
-      const cy=parseFloat(el.style.top)+p.y+32;
-      if(cy>H-80&&!p.bounced){
-        p.vy*=-.55; p.vx*=.8; p.rv*=.7;
-        p.bounced=true;
-      }
-      // Fade after bounce or if going off screen
-      if(p.bounced) p.o=Math.max(0,p.o-.025);
-      if(cy>H+100) p.o=0;
-      if(p.o<=0){p.el.remove();p.alive=false;return;}
-      any=true;
-      p.el.style.transform=`translate(${p.x}px,${p.y}px) rotate(${p.rot}deg)`;
-      p.el.style.opacity=p.o;
-    });
-    if(any||frame<30)requestAnimationFrame(tick);else showCard();
-  }
-  spawnP();requestAnimationFrame(tick);
+
+  // Start gyro-driven float loop
+  gyroActive=true;
+  floatLoop();
+
+  // Show card after short delay
+  setTimeout(showCard, 400);
+}
+
+function floatLoop(){
+  if(!gyroActive)return;
+  floatingBodies.forEach(p=>{
+    // Drift toward gyro target with momentum
+    const targetX = gyroY * 18 * p.depth;
+    const targetY = gyroX * 18 * p.depth;
+    p.vx += (targetX - p.x) * 0.018;
+    p.vy += (targetY - p.y) * 0.018;
+    // Damping
+    p.vx *= 0.92;
+    p.vy *= 0.92;
+    p.x += p.vx;
+    p.y += p.vy;
+    // Subtle rotation based on movement
+    p.rot += (p.vx * 0.15);
+    p.rot *= 0.95;
+    p.el.style.transform=`translate(${p.x}px,${p.y}px) rotate(${p.rot}deg)`;
+  });
+  floatAnimFrame=requestAnimationFrame(floatLoop);
+}
+
+function stopFloating(){
+  gyroActive=false;
+  if(floatAnimFrame)cancelAnimationFrame(floatAnimFrame);
+  floatingBodies.forEach(p=>p.el.remove());
+  floatingBodies=[];
 }
 function showCard(){
   const{val,suit}=picked;const C=suit.c==='red'?'red':'blk';
@@ -232,8 +260,17 @@ function spawnP(){
   }
 }
 function onMotion(e){
-  if(!ready||revealed)return;const a=e.accelerationIncludingGravity;if(!a)return;
-  const m=Math.abs(a.x)+Math.abs(a.y)+Math.abs(a.z);shakeQ.push(m);if(shakeQ.length>4)shakeQ.shift();
+  const a=e.accelerationIncludingGravity;if(!a)return;
+  // Feed gyro to floating icons
+  if(gyroActive){
+    gyroX = (a.x||0) * 0.08;
+    gyroY = (a.y||0) * 0.08;
+    return;
+  }
+  // Shake detection to trigger effect
+  if(!ready||revealed)return;
+  const m=Math.abs(a.x)+Math.abs(a.y)+Math.abs(a.z);
+  shakeQ.push(m);if(shakeQ.length>4)shakeQ.shift();
   const avg=shakeQ.reduce((s,v)=>s+v,0)/shakeQ.length,now=Date.now();
   if(avg>26&&now-lastShake>700){lastShake=now;doFall();}
 }
